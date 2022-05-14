@@ -30,9 +30,10 @@ async function run() {
         await client.connect()
 
         const serviceCollection = client.db("doctorsPortal").collection("services")
+        const bookingCollection = client.db("doctorsPortal").collection("booking")
 
 
-
+        // all servies api
         app.get('/services', async (req, res) => {
             const query = {}
 
@@ -42,6 +43,18 @@ async function run() {
             res.send(result)
             console.log(result)
         })
+
+        // booking api
+
+        app.post('/booking', async (req, res) => {
+            const booking = req.body;
+
+            const result = await bookingCollection.insertOne(booking)
+            res.send(result)
+        })
+
+
+
 
 
 
