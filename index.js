@@ -62,7 +62,7 @@ async function run() {
 
         // all users 
 
-        app.get('/users', async (req, res) => {
+        app.get('/users', jwtVerify, async (req, res) => {
 
             const users = await userCollection.find().toArray()
             res.send(users)
@@ -82,7 +82,7 @@ async function run() {
 
 
 
-        //user update
+        //add user
         app.put('/user/:email', async (req, res) => {
 
             const email = req.params.email;
@@ -104,6 +104,44 @@ async function run() {
 
 
         })
+
+
+        // make admin
+        app.put('/user/admin/:email', async (req, res) => {
+
+            const email = req.params.email;
+            const filter = { email: email };
+
+
+            const updateDoc = { $set: { role: 'admin' } };
+
+            const result = await userCollection.updateOne(filter, updateDoc)
+
+            console.log(result)
+
+
+            res.send(result)
+
+
+        })
+        app.put('/user/user/:email', async (req, res) => {
+
+            const email = req.params.email;
+            const filter = { email: email };
+
+
+            const updateDoc = { $set: { role: 'user' } };
+
+            const result = await userCollection.updateOne(filter, updateDoc)
+
+            console.log(result)
+
+
+            res.send(result)
+
+
+        })
+
 
 
         // avaible 
