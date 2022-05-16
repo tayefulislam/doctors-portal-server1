@@ -26,9 +26,12 @@ const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology:
 
 // jwt verify
 function jwtVerify(req, res, next) {
-    const authorization = req.headers.authorization;
-    const token = authorization?.split(' ')[1]
 
+    const authorization = req.headers.authorization;
+
+    // console.log('line 32', authorization)
+
+    const token = authorization?.split(' ')[1]
     if (!token) {
         return res.status(401).send({ message: 'Unauthorized' })
     }
@@ -40,6 +43,8 @@ function jwtVerify(req, res, next) {
         }
 
         req.decoded = decoded
+
+        console.log(decoded)
         next()
     });
 
@@ -82,6 +87,9 @@ async function run() {
 
 
 
+
+
+
         //add user
         app.put('/user/:email', async (req, res) => {
 
@@ -106,21 +114,46 @@ async function run() {
         })
 
 
+        // is admin check
+
+        app.get('/admin/:email', jwtVerify, async (req, res) => {
+            const email = req.params.email;
+            const user = await userCollection.findOne({ email: email })
+            const isAdmin = user.role === 'admin';
+
+            res.send({ isAdmin: isAdmin })
+
+        })
+
+
         // make admin
-        app.put('/user/admin/:email', async (req, res) => {
+        app.put('/user/admin/:email', jwtVerify, async (req, res) => {
 
             const email = req.params.email;
-            const filter = { email: email };
+
+            const requester = req.decoded.email;
+
+            const requesterAccount = await userCollection.findOne({ email: requester })
+
+            console.log('line 126', requesterAccount)
+
+            if (requesterAccount.role === 'admin') {
+
+                const filter = { email: email };
+
+                const updateDoc = { $set: { role: 'admin' } };
+
+                const result = await userCollection.updateOne(filter, updateDoc)
+
+                console.log(result)
+
+                res.send(result)
+
+            }
+
+            res.status(403).send({ message: 'Forbiden' })
 
 
-            const updateDoc = { $set: { role: 'admin' } };
-
-            const result = await userCollection.updateOne(filter, updateDoc)
-
-            console.log(result)
-
-
-            res.send(result)
 
 
         })
