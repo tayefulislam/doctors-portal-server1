@@ -1,16 +1,17 @@
 const express = require("express");
-const cors = require('cors')
-const jwt = require('jsonwebtoken')
+const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const nodemailer = require("nodemailer");
 require('dotenv').config()
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 const app = express()
 const port = process.env.PORT || 5000;
 
 // middle ware
 
-app.use(cors())
-app.use(express.json())
+app.use(cors());
+app.use(express.json());
 
 
 
@@ -21,6 +22,18 @@ const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@clu
 console.log(uri)
 
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
+
+
+
+let transporter = nodemailer.createTransport({
+    host: "mail.priyopathshala.com",
+    port: 465,
+    secure: true, // true for 465, false for other ports
+    auth: {
+        user: "tayeful1@priyopathshala.com", // generated ethereal user
+        pass: process.env.SENDER_PASS, // generated ethereal password
+    },
+})
 
 
 
@@ -51,6 +64,35 @@ function jwtVerify(req, res, next) {
 
 }
 
+const bookingEmail = async (booking) => {
+
+    console.log(booking)
+
+    let info = await transporter.sendMail({
+        from: `tayeful1@priyopathshala.com`, // sender address
+
+        to: booking?.patientEmail, // list of receivers
+        subject: `Appointment Confirmation for ${booking?.treatment}`, // Subject line
+        text: `Dear ${booking?.patientEmail}
+        You have A Appointment on ${booking?.date} at ${booking?.slot}  Please come in time 
+        Best Wishes,
+        
+        Doctors Portal En.`,
+        html: `<h1> Dear ${booking?.patientEmail}</h1> <br>
+        You have A Appointment on ${booking?.date} at ${booking?.slot} <br> Please come in time <br>
+        Best Wishes,
+        <br>
+        Doctors Portal En.`, // html body
+    });
+
+    return ("Message sent: %s", info.messageId)
+
+
+}
+
+
+
+
 
 
 async function run() {
@@ -63,7 +105,30 @@ async function run() {
         const serviceCollection = client.db("doctorsPortal").collection("services")
         const bookingCollection = client.db("doctorsPortal").collection("booking")
         const userCollection = client.db("doctorsPortal").collection("user")
+        const doctorCollection = client.db("doctorsPortal").collection("doctors")
 
+
+        // common function
+
+        const verifyAdmin = async (req, res, next) => {
+            const requester = req.decoded.email;
+
+            const requesterAccount = await userCollection.findOne({ email: requester })
+
+            // console.log('line 126', requesterAccount)
+
+            if (requesterAccount.role === 'admin') {
+
+                next()
+            }
+
+            else {
+                res.status(403).send({ message: 'Forbiden' })
+            }
+
+
+
+        }
 
         // all users 
 
@@ -73,11 +138,13 @@ async function run() {
             res.send(users)
         })
 
-        app.get('/user', jwtVerify, async (req, res) => {
+        app.get('/user', async (req, res) => {
 
             const users = await userCollection.find().toArray()
             res.send(users)
         })
+
+
 
 
         // all servies api
@@ -85,6 +152,18 @@ async function run() {
             const query = {}
 
             const cursor = serviceCollection.find(query)
+            const result = await cursor.toArray()
+
+            res.send(result)
+            console.log(result)
+        })
+
+
+
+        app.get('/servicesName', async (req, res) => {
+            const query = {}
+
+            const cursor = serviceCollection.find(query).project({ name: 1 })
             const result = await cursor.toArray()
 
             res.send(result)
@@ -137,32 +216,20 @@ async function run() {
 
             const email = req.params.email;
 
-            const requester = req.decoded.email;
+            const filter = { email: email };
 
-            const requesterAccount = await userCollection.findOne({ email: requester })
+            const updateDoc = { $set: { role: 'admin' } };
 
-            console.log('line 126', requesterAccount)
+            const result = await userCollection.updateOne(filter, updateDoc)
 
-            if (requesterAccount.role === 'admin') {
+            console.log(result)
 
-                const filter = { email: email };
-
-                const updateDoc = { $set: { role: 'admin' } };
-
-                const result = await userCollection.updateOne(filter, updateDoc)
-
-                console.log(result)
-
-                res.send(result)
-
-            }
-
-            res.status(403).send({ message: 'Forbiden' })
-
-
+            res.send(result)
 
 
         })
+
+
         app.put('/user/user/:email', async (req, res) => {
 
             const email = req.params.email;
@@ -252,6 +319,15 @@ async function run() {
 
         })
 
+        // get booking detail by id
+
+        app.get('/booking/:id', jwtVerify, async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: ObjectId(id) }
+            const result = await bookingCollection.findOne(query)
+            res.send(result)
+        })
+
 
         // booking api
 
@@ -260,6 +336,7 @@ async function run() {
             const booking = req.body;
 
             const query = { treatment: booking.treatment, date: booking.date, patientEmail: booking.patientEmail }
+            bookingEmail(booking)
 
             const exist = await bookingCollection.findOne(query);
 
@@ -269,6 +346,25 @@ async function run() {
 
             const result = await bookingCollection.insertOne(booking)
             res.send({ success: true, result })
+        })
+
+
+        // get all doctor 
+
+        app.get('/doctors', jwtVerify, verifyAdmin, async (req, res) => {
+            const result = await doctorCollection.find().toArray()
+            res.send(result)
+        })
+
+        // add doctor
+
+        app.post('/addDoctor', jwtVerify, verifyAdmin, async (req, res) => {
+
+            const doctor = req.body;
+
+            const result = await doctorCollection.insertOne(doctor)
+
+            res.send(result)
         })
 
 
